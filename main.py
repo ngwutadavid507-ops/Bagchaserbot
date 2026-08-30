@@ -1,4 +1,5 @@
 import os
+import asyncio
 import logging
 import threading
 from flask import Flask
@@ -14,10 +15,17 @@ log = logging.getLogger("signal-bot")
 
 open_position_count = 0  # naive local counter; for real accuracy, query Bybit positions instead
 
+# Newer Python versions no longer auto-create an event loop for the main
+# thread. Telethon expects one to already exist when the client is built,
+# so we create and set it explicitly before constructing the client.
+loop = asyncio.new_event_loop()
+asyncio.set_event_loop(loop)
+
 client = TelegramClient(
     StringSession(config.TG_SESSION_STRING),
     config.TG_API_ID,
     config.TG_API_HASH,
+    loop=loop,
 )
 
 # --- Tiny health-check web server, so UptimeRobot has something to ping ---
