@@ -1,4 +1,7 @@
+import os
 import logging
+import threading
+from flask import Flask
 from telethon import TelegramClient, events
 from telethon.sessions import StringSession
 
@@ -16,6 +19,22 @@ client = TelegramClient(
     config.TG_API_ID,
     config.TG_API_HASH,
 )
+
+# --- Tiny health-check web server, so UptimeRobot has something to ping ---
+# This is what lets us deploy as a free Render Web Service instead of a
+# paid Background Worker: UptimeRobot pings this every few minutes, which
+# keeps the whole process (including the Telegram listener below) awake.
+app = Flask(__name__)
+
+
+@app.route("/")
+def health():
+    return "Signal bot is running", 200
+
+
+def run_health_server():
+    port = int(os.getenv("PORT", "10000"))  # Render sets PORT automatically
+    app.run(host="0.0.0.0", port=port)
 
 
 async def send_alert(text: str):
@@ -59,6 +78,11 @@ async def on_signal(event):
 def main():
     log.info(f"Starting signal bot | DRY_RUN={config.DRY_RUN} | "
               f"watching {config.TG_SOURCE_CHANNEL}")
+
+    # Run the health-check server in a background thread so it doesn't
+    # block the Telegram client's event loop
+    threading.Thread(target=run_health_server, daemon=True).start()
+
     client.start()
     client.run_until_disconnected()
 
